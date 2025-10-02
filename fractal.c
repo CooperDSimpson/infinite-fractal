@@ -1,4 +1,4 @@
-// infinite_mandelbrot_dd_local.c - Deep zoom Mandelbrot with double-double arithmetic
+// infinite_mandelbrot_dd_local.c - True infinite zoom Mandelbrot
 #include <windows.h>
 #include "glad.h"
 #include <stdio.h>
@@ -7,9 +7,9 @@
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+// --- Double-double arithmetic ---
 typedef struct { double hi, lo; } dd_t;
 
-// --- Double-double arithmetic ---
 dd_t dd_add(dd_t a, dd_t b) {
     double s = a.hi + b.hi;
     double v = s - a.hi;
@@ -26,18 +26,21 @@ dd_t dd_sub(dd_t a, dd_t b) {
 
 dd_t dd_mul(dd_t a, dd_t b) {
     double p = a.hi * b.hi;
-    double e = fma(a.hi, b.hi, -p) + a.hi*b.lo + a.lo*b.hi + a.lo*b.lo;
+    double e = fma(a.hi,b.hi,-p) + a.hi*b.lo + a.lo*b.hi + a.lo*b.lo;
     return (dd_t){p + e, e - (p + e - p)};
 }
 
-dd_t dd_from_double(double x) { return (dd_t){x, 0.0}; }
+dd_t dd_from_double(double x) { return (dd_t){x,0.0}; }
 
 // --- Shader sources ---
 const char* vertexShaderSource = R"(
 #version 330 core
 layout(location=0) in vec2 aPos;
 out vec2 fragCoord;
-void main() { fragCoord = aPos; gl_Position = vec4(aPos,0,1); }
+void main() {
+    fragCoord = aPos;
+    gl_Position = vec4(aPos, 0.0, 1.0);
+}
 )";
 
 const char* fragmentShaderSource = R"(
@@ -73,22 +76,22 @@ dd dd_mul(dd a, dd b) {
 
 dd dd_from_double(double x){ return dd(x,0.0); }
 
-void main(){
-    // Map pixel to complex plane
-    dd x = dd_add(dd_from_double(u_center.x), dd_mul(dd_from_double(fragCoord.x), dd_from_double(u_scale)));
-    dd y = dd_add(dd_from_double(u_center.y), dd_mul(dd_from_double(fragCoord.y), dd_from_double(u_scale)));
+void main() {
+    // Map fragCoord (-1..1) to complex plane
+    dd cx = dd_add(dd_from_double(u_center.x), dd_mul(dd_from_double(fragCoord.x), dd_from_double(u_scale)));
+    dd cy = dd_add(dd_from_double(u_center.y), dd_mul(dd_from_double(fragCoord.y), dd_from_double(u_scale)));
 
     dd zx = dd_from_double(0.0);
     dd zy = dd_from_double(0.0);
 
     int iter = 0;
-    while(iter < u_maxIter){
+    while(iter < u_maxIter) {
         dd zx2 = dd_mul(zx,zx);
         dd zy2 = dd_mul(zy,zy);
         dd zxzy = dd_mul(zx,zy);
 
-        dd zx_new = dd_add(dd_sub(zx2, zy2), x);
-        dd zy_new = dd_add(dd_mul(dd_from_double(2.0), zxzy), y);
+        dd zx_new = dd_add(dd_sub(zx2, zy2), cx);
+        dd zy_new = dd_add(dd_mul(dd_from_double(2.0), zxzy), cy);
 
         zx = zx_new;
         zy = zy_new;
@@ -98,8 +101,7 @@ void main(){
     }
 
     float t = float(iter)/float(u_maxIter);
-    vec3 tarletonPurple = vec3(0.302,0.0,0.6);
-    vec3 color = tarletonPurple * t * (0.5 + 0.5*sin(3.1415*t*10.0));
+    vec3 color = vec3(0.302,0.0,0.6) * t * (0.5 + 0.5*sin(3.1415*t*10.0));
     FragColor = vec4(color,1.0);
 }
 )";
@@ -137,7 +139,7 @@ GLuint createProgram(){
 // --- Globals ---
 HDC hDC;
 double cx=-0.5, cy=0.0, scale=3.0;
-int maxIter=500;
+int maxIter=1000;
 POINT lastMouse; int dragging=0;
 
 // --- Main ---
@@ -145,7 +147,7 @@ int main(){
     WNDCLASSA wc={0}; wc.lpfnWndProc=WndProc;
     wc.hInstance=GetModuleHandle(NULL); wc.lpszClassName="FractalWindow";
     RegisterClassA(&wc);
-    HWND hwnd = CreateWindowA("FractalWindow","Deep Zoom Mandelbrot",
+    HWND hwnd = CreateWindowA("FractalWindow","Infinite Mandelbrot",
         WS_OVERLAPPEDWINDOW|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,800,600,
         NULL,NULL,wc.hInstance,NULL);
 
@@ -218,3 +220,4 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam){
     }
     return 0;
 }
+
