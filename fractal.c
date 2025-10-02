@@ -33,26 +33,44 @@ uniform vec2 u_center;
 uniform float u_scale;
 uniform int u_maxIter;
 
-vec3 tarletonPurple = vec3(0.36, 0.0, 0.58); // RGB for Tarleton purple
+vec3 tarletonPurple = vec3(0.36, 0.0, 0.58);
+
+// Distance estimate for Mandelbrot
+float mandelbrotDistance(vec2 c, int maxIter) {
+    vec2 z = vec2(0.0);
+    vec2 dz = vec2(0.0);
+    for(int i = 0; i < maxIter; i++) {
+        dz = 2.0 * vec2(
+            z.x*dz.x - z.y*dz.y,
+            z.x*dz.y + z.y*dz.x
+        ) + vec2(1.0, 0.0);
+
+        z = vec2(
+            z.x*z.x - z.y*z.y,
+            2.0*z.x*z.y
+        ) + c;
+
+        if(dot(z,z) > 4.0) break;
+    }
+    return length(z) * log(length(z)) / length(dz);
+}
 
 void main() {
     vec2 c = u_center + (uv*2.0 - 1.0) * u_scale;
-    vec2 z = vec2(0.0);
 
-    int iter = 0;
-    for(int i=0; i<u_maxIter; i++) {
-        z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;
-        if(dot(z,z) > 4.0) break;
-        iter++;
-    }
+    float dist = mandelbrotDistance(c, u_maxIter);
 
-    if(iter == u_maxIter) {
-        FragColor = vec4(tarletonPurple, 1.0); // inside set = purple
-    } else {
-        FragColor = vec4(1.0, 1.0, 1.0, 1.0); // outside = white
-    }
+    // Adjust epsilon based on zoom
+    float epsilon = 0.002 * u_scale; 
+
+    // Smooth line using smoothstep
+    float edge = smoothstep(epsilon, 0.0, dist);
+
+    // Line color for boundary, purple interior
+    vec3 color = mix(vec3(1.0), tarletonPurple, edge);
+
+    FragColor = vec4(color, 1.0);
 }
-
 )";
 
 // --- Helpers ---
