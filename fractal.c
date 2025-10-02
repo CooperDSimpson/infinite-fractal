@@ -10,8 +10,60 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 HDC hDC;
 double cx=-0.5, cy=0.0, scale=3.0;
 int width=800, height=600;
-int maxIter = 10000;  // can increase for stills
+int maxIter = 2;  // can increase for stills
 POINT lastMouse; int dragging=0;
+
+char* loadFile(const char* filename) {
+    FILE* f = fopen(filename, "rb");
+    if (!f) {
+        MessageBoxA(NULL, filename, "Failed to open file", MB_OK);
+        ExitProcess(1);
+    }
+    fseek(f, 0, SEEK_END);
+    long len = ftell(f);
+    rewind(f);
+
+    char* buffer = (char*)malloc(len + 1);
+    if (!buffer) {
+        MessageBoxA(NULL, "Out of memory", "Error", MB_OK);
+        ExitProcess(1);
+    }
+    fread(buffer, 1, len, f);
+    buffer[len] = '\0';
+    fclose(f);
+    return buffer;
+}
+
+char* chooseShaderFile() {
+    WIN32_FIND_DATA fd;
+    HANDLE hFind = FindFirstFile("*.frag", &fd);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        MessageBoxA(NULL, "No .frag files found", "Error", MB_OK);
+        ExitProcess(1);
+    }
+
+    char files[64][MAX_PATH]; // up to 64 shaders
+    int count = 0;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            strcpy(files[count++], fd.cFileName);
+            if (count >= 64) break;
+        }
+    } while (FindNextFile(hFind, &fd));
+    FindClose(hFind);
+
+    printf("Available fragment shaders:\n");
+    for (int i = 0; i < count; i++) {
+        printf("  %d) %s\n", i + 1, files[i]);
+    }
+
+    printf("Choose shader [1-%d]: ", count);
+    int choice = 1;
+    scanf("%d", &choice);
+    if (choice < 1 || choice > count) choice = 1;
+
+    return _strdup(files[choice - 1]); // caller frees
+}
 
 // --- Shaders ---
 const char* vertexShaderSource = R"(
@@ -21,55 +73,6 @@ out vec2 uv;
 void main() {
     uv = aPos * 0.5 + 0.5;
     gl_Position = vec4(aPos, 0.0, 1.0);
-}
-)";
-
-const char* fragmentShaderSource = R"(
-#version 330 core
-in vec2 uv;
-out vec4 FragColor;
-
-uniform vec2 u_center;
-uniform float u_scale;
-uniform int u_maxIter;
-
-vec3 tarletonPurple = vec3(0.36, 0.0, 0.58);
-
-// Distance estimate for Mandelbrot
-float mandelbrotDistance(vec2 c, int maxIter) {
-    vec2 z = vec2(0.0);
-    vec2 dz = vec2(0.0);
-    for(int i = 0; i < maxIter; i++) {
-        dz = 2.0 * vec2(
-            z.x*dz.x - z.y*dz.y,
-            z.x*dz.y + z.y*dz.x
-        ) + vec2(1.0, 0.0);
-
-        z = vec2(
-            z.x*z.x - z.y*z.y,
-            2.0*z.x*z.y
-        ) + c;
-
-        if(dot(z,z) > 4.0) break;
-    }
-    return length(z) * log(length(z)) / length(dz);
-}
-
-void main() {
-    vec2 c = u_center + (uv*2.0 - 1.0) * u_scale;
-
-    float dist = mandelbrotDistance(c, u_maxIter);
-
-    // Adjust epsilon based on zoom
-    float epsilon = 0.002 * u_scale; 
-
-    // Smooth line using smoothstep
-    float edge = smoothstep(epsilon, 0.0, dist);
-
-    // Line color for boundary, purple interior
-    vec3 color = mix(vec3(1.0), tarletonPurple, edge);
-
-    FragColor = vec4(color, 1.0);
 }
 )";
 
@@ -97,6 +100,11 @@ GLuint createProgram(const char* vsSrc, const char* fsSrc){
 
 // --- Main ---
 int main(){
+    printf("how many iterations? ");
+    scanf("%d", &maxIter);
+    char* fragSource = loadFile(chooseShaderFile());    
+
+
     WNDCLASSA wc={0}; wc.lpfnWndProc=WndProc;
     wc.hInstance=GetModuleHandle(NULL); wc.lpszClassName="FractalWindow";
     RegisterClassA(&wc);
@@ -113,7 +121,7 @@ int main(){
     HGLRC hRC=wglCreateContext(hDC); wglMakeCurrent(hDC,hRC);
     if(!gladLoadGL()){ MessageBoxA(NULL,"GLAD failed","Error",MB_OK); return 1; }
 
-    GLuint program = createProgram(vertexShaderSource, fragmentShaderSource);
+    GLuint program = createProgram(vertexShaderSource, fragSource);
     glUseProgram(program);
 
     // Quad
@@ -148,7 +156,8 @@ int main(){
         SwapBuffers(hDC);
     }
 
-end:
+end: 
+    free(fragSource);
     wglMakeCurrent(NULL,NULL); wglDeleteContext(hRC); ReleaseDC(hwnd,hDC);
     return 0;
 }
