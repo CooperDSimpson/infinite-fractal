@@ -24,7 +24,7 @@ dd_t dd_sub(dd_t a, dd_t b) {
     return (dd_t){s + t, t - (s + t - s)};
 }
 
-dd_t dd_mul(dd_t a, dd_t b) {
+inline dd_t dd_mul(dd_t a, dd_t b) {
     double p = a.hi * b.hi;
     double e = fma(a.hi,b.hi,-p) + a.hi*b.lo + a.lo*b.hi + a.lo*b.lo;
     return (dd_t){p + e, e - (p + e - p)};
@@ -220,4 +220,5 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam){
     }
     return 0;
 }
+
 
