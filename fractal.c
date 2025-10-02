@@ -1,4 +1,3 @@
-// infinite_mandelbrot_dd_local.c - True infinite zoom Mandelbrot
 #include <windows.h>
 #include "glad.h"
 #include <stdio.h>
@@ -220,5 +219,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam){
     }
     return 0;
 }
+
 
 
